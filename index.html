@@ -177,7 +177,15 @@ textarea.msg{font-family:var(--font-mono);font-size:13px;min-height:120px}
 <div id="toast" role="status" hidden></div>
 
 <script type="module">
-import {firebaseConfig} from './firebase-config.js';
+// Firebase Web App configuration. Browser-compatible; no npm imports required.
+const firebaseConfig = {
+  apiKey: "AIzaSyDZLSK9GAQ8KRTXWcvUWQrE1k9WArb2mhg",
+  authDomain: "trip-ledger-github.firebaseapp.com",
+  projectId: "trip-ledger-github",
+  storageBucket: "trip-ledger-github.firebasestorage.app",
+  messagingSenderId: "832293982415",
+  appId: "1:832293982415:web:468a2b578bae8e4f18e7ba"
+};
 /* ---------- pure logic ---------- */
 //@@logic-start
 function computeLedger(members, expenses, payments){
@@ -342,7 +350,7 @@ function render(){
   if(S.gate){$('#tabs').innerHTML='';$('#view').innerHTML=gateHTML();return;}
   const v=$('#view');
   if(!S.tripId)$('#tabs').innerHTML='';else renderTabs();
-  const banner=S.dbOk===false?`<div class="banner">Shared storage isn't connected. Add your Firebase settings to firebase-config.js, otherwise changes stay in this browser tab only and disappear on reload.</div>`:'';
+  const banner=S.dbOk===false?`<div class="banner">Shared storage isn't connected. Check the Firebase configuration and Firestore rules; changes may not be saved to shared storage.</div>`:'';
   if(S.dbOk===null||(S.dbOk&&(!S.loaded.trips||(S.tripId&&COLS.some(c=>!S.loaded[c]))))){
     v.innerHTML=`<div class="empty"><b>Loading your trips</b>Fetching people, expenses and payments.</div>`;return;
   }
