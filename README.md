@@ -43,8 +43,13 @@ service cloud.firestore {
 ## How access works
 Each group's data lives under its secret group code. People who do not know the code cannot list or find it, but **anyone who has the invite link can read and edit the ledger**, and there are no passwords. Share the link only with your group. Treat it like a private chat link.
 
+## Receipt photos
+On the Expenses tab each expense has **Add photo**. Pick a photo or take one with the phone camera. The page shrinks it in the browser (longest side 1200 px, JPEG, about 30 to 150 KB) before saving, so a 10 MB phone photo costs very little. Each photo is stored in its own record and only loaded when you tap **View photo**, so the expense list stays fast.
+
+Firebase's free plan includes 1 GiB of database storage, which is room for several thousand receipts at this size. Deleting an expense or a trip also deletes its photos. Photos are not included in **Download backup**.
+
 ## Backups
-Open a trip, choose **Edit trip > Download backup** to save a JSON file. Restore it any time from **New trip**.
+Open a trip, choose **Edit trip > Download backup** to save a JSON file of its people, bookings, expenses and payments (not photos). Restore it any time from **New trip**.
 
 ## Demo mode
 If `firebase-config.js` still says `PASTE_API_KEY`, the page works but keeps data only in that browser tab. This is only for trying it out.
