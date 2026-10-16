@@ -175,6 +175,7 @@ textarea.msg{font-family:var(--font-mono);font-size:13px;min-height:120px}
 </div>
 <div id="sheet" hidden><div class="panel" role="dialog" aria-modal="true" id="panel"></div></div>
 <div id="toast" role="status" hidden></div>
+<input type="file" id="photo-input" accept="image/*" hidden>
 
 <script type="module">
 // Firebase Web App configuration. Browser-compatible; no npm imports required.
@@ -237,7 +238,7 @@ function equalSplit(totalBase, ids){
 //@@logic-end
 
 /* ---------- state & storage ---------- */
-const S={trips:[],tripId:null,members:[],expenses:[],payments:[],collections:[],tab:'overview',loaded:{},dbOk:null,gate:false,editPeople:new Set(),form:null};
+const S={trips:[],tripId:null,receipts:[],photoFor:null,members:[],expenses:[],payments:[],collections:[],tab:'overview',loaded:{},dbOk:null,gate:false,editPeople:new Set(),form:null};
 let DB=null;
 const COLS=['members','expenses','payments','collections'];
 const fmt=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -350,7 +351,7 @@ function render(){
   if(S.gate){$('#tabs').innerHTML='';$('#view').innerHTML=gateHTML();return;}
   const v=$('#view');
   if(!S.tripId)$('#tabs').innerHTML='';else renderTabs();
-  const banner=S.dbOk===false?`<div class="banner">Shared storage isn't connected. Check the Firebase configuration and Firestore rules; changes may not be saved to shared storage.</div>`:'';
+  const banner=S.dbOk===false?`<div class="banner">Shared storage isn't connected. Add your Firebase settings to firebase-config.js, otherwise changes stay in this browser tab only and disappear on reload.</div>`:'';
   if(S.dbOk===null||(S.dbOk&&(!S.loaded.trips||(S.tripId&&COLS.some(c=>!S.loaded[c]))))){
     v.innerHTML=`<div class="empty"><b>Loading your trips</b>Fetching people, expenses and payments.</div>`;return;
   }
@@ -425,7 +426,7 @@ function renderExpenses(){
       <div class="shares">${shares}</div>
       <div class="foot"><div class="row-actions"><button class="btn sm" data-act="toggle-exp" data-field="receipt" data-id="${e.id}" aria-pressed="${!!e.receipt}">Receipt</button>
       <button class="btn sm" data-act="toggle-exp" data-field="verified" data-id="${e.id}" aria-pressed="${!!e.verified}">Verified</button></div>
-      <div class="row-actions"><button class="btn sm" data-act="edit-expense" data-id="${e.id}">Edit</button><button class="btn sm danger" data-act="del-expense" data-id="${e.id}">Delete</button></div></div></article>`;
+      <div class="row-actions"><button class="btn sm" data-act="photo" data-id="${e.id}">${e.photo?'View photo':'Add photo'}</button><button class="btn sm" data-act="edit-expense" data-id="${e.id}">Edit</button><button class="btn sm danger" data-act="del-expense" data-id="${e.id}">Delete</button></div></div></article>`;
   }).join('');
   return `<section><div class="sec-head"><h2>Expenses</h2><button class="btn primary" data-act="add-expense">Add expense</button></div>
    <div class="stack">${items||emptyBox('No expenses yet','Record who paid and who shares each cost. Balances and settle-up payments update straight away.')}</div></section>`;
@@ -552,7 +553,7 @@ async function saveExpense(){
   }
   const k=F.keep||{};
   const data={title,payer:$('#x-payer').value,amount:tb,currency:cur,date:$('#x-date').value||todayISO(),note:$('#x-note').value.trim(),shares,
-    receipt:!!k.receipt,verified:!!k.verified,createdAt:k.createdAt||Date.now()};
+    receipt:!!k.receipt,verified:!!k.verified,photo:!!k.photo,createdAt:k.createdAt||Date.now()};
   if(cur!==baseCur()){data.original=parseFloat($('#x-amount').value);data.rate=parseFloat($('#x-rate').value);}
   const ok=await guarded(()=>F.id?store.set('expenses',F.id,data):store.add('expenses',data));
   if(ok){closeSheet();toast('Expense saved.');}
@@ -642,18 +643,82 @@ async function saveTrip(){
 async function deleteTrip(){
   const id=S.tripId;
   const ok=await guarded(async()=>{
+    for(const e of S.expenses.filter(x=>x.photo)){await store.del('receipts',e.id);}
     for(const c of COLS){for(const it of [...S[c]]){await store.del(c,it.id);}}
     await store.del('trips',id);
   });
   if(ok){closeSheet();toast('Trip deleted.');}
 }
 
+/* ---------- receipt photos ---------- */
+/* Photos are shrunk in the browser (max 1200px, JPEG) to about 150 KB and kept in their own
+   record per expense (receipts/<expenseId>), so the expense list never downloads images. */
+const PHOTO_MAX_SIDE=1200, PHOTO_MAX_CHARS=150000;
+async function compressImage(file){
+  let src,iw,ih;
+  try{src=await createImageBitmap(file,{imageOrientation:'from-image'});iw=src.width;ih=src.height;}
+  catch(e){
+    src=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=URL.createObjectURL(file);});
+    iw=src.naturalWidth;ih=src.naturalHeight;
+  }
+  if(!iw||!ih)throw new Error('empty image');
+  let scale=Math.min(1,PHOTO_MAX_SIDE/Math.max(iw,ih)),best=null;
+  const c=document.createElement('canvas'),ctx=c.getContext('2d');
+  for(let round=0;round<7;round++){
+    c.width=Math.max(1,Math.round(iw*scale));c.height=Math.max(1,Math.round(ih*scale));
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(src,0,0,c.width,c.height);
+    for(const q of [0.72,0.6,0.5,0.4]){
+      const url=c.toDataURL('image/jpeg',q);
+      if(!best||url.length<best.dataUrl.length)best={dataUrl:url,w:c.width,h:c.height};
+      if(url.length<=PHOTO_MAX_CHARS)return best;
+    }
+    scale*=0.8;
+  }
+  return best;
+}
+async function getReceipt(id){
+  if(DB){const s=await DB.doc(colPath('receipts')+'/'+id).get();return s.exists?s.data():null;}
+  return S.receipts.find(x=>x.id===id)||null;
+}
+async function savePhoto(expId,file){
+  if(!file.type||file.type.indexOf('image/')!==0){toast('Choose an image file.');return;}
+  toast('Shrinking photo…');
+  let r;try{r=await compressImage(file);}catch(e){toast("Couldn't read that image.");return;}
+  if(!r||r.dataUrl.length>600000){toast('That photo is too detailed to shrink enough. Try a closer shot.');return;}
+  const ok=await guarded(async()=>{
+    await store.set('receipts',expId,{img:r.dataUrl,w:r.w,h:r.h,createdAt:Date.now()});
+    await store.update('expenses',expId,{photo:true,receipt:true});
+  });
+  if(ok)toast('Photo saved ('+Math.round(r.dataUrl.length/1024)+' KB).');
+}
+function pickPhoto(id){S.photoFor=id;const i=$('#photo-input');if(i)i.click();}
+function replacePhoto(){const id=S.form&&S.form.id;closeSheet();if(id)pickPhoto(id);}
+async function deletePhoto(){
+  const id=S.form&&S.form.id;if(!id)return;
+  const ok=await guarded(async()=>{await store.del('receipts',id);await store.update('expenses',id,{photo:false});});
+  if(ok){closeSheet();toast('Photo removed.');}
+}
+async function openPhoto(id){
+  const e=S.expenses.find(x=>x.id===id);
+  S.form={type:'photo',id};
+  openSheet(`<h2>Receipt photo</h2><p class="hint" style="margin:0">${esc(e?e.title:'')}</p><div id="ph-box" class="empty">Loading photo…</div>
+  <div class="actions"><button class="btn danger" type="button" data-fa="photo-del" style="margin-right:auto">Remove photo</button><button class="btn" type="button" data-fa="photo-replace">Replace photo</button><button class="btn primary" type="button" data-fa="cancel">Close</button></div>`);
+  let d=null;try{d=await getReceipt(id);}catch(err){}
+  if(!S.form||S.form.id!==id)return;
+  const box=$('#ph-box');if(!box)return;
+  if(d&&typeof d.img==='string'&&d.img.indexOf('data:image/jpeg;base64,')===0){
+    const im=new Image();im.alt='Receipt photo for '+(e?e.title:'expense');im.style.cssText='width:100%;height:auto;border-radius:4px;display:block';
+    im.src=d.img;box.className='';box.textContent='';box.appendChild(im);
+  }else box.textContent='No photo found for this expense.';
+}
+function photoAction(id){const e=S.expenses.find(x=>x.id===id);if(e&&e.photo)openPhoto(id);else pickPhoto(id);}
+
 /* ---------- events ---------- */
 document.addEventListener('click',async ev=>{
   const t=ev.target.closest('[data-tab],[data-act],[data-fa],[data-fm],[data-fs]');
   if(!t)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;render();window.scrollTo({top:0});return;}
-  if(t.dataset.fa){ if(t.dataset.fa==='cancel')closeSheet(); else if(t.dataset.fa==='save-expense')saveExpense(); else if(t.dataset.fa==='save-payment')savePayment(); else if(t.dataset.fa==='save-booking')saveBooking(); else if(t.dataset.fa==='save-trip')saveTrip(); else if(t.dataset.fa==='del-trip')armDelete(t,deleteTrip); else if(t.dataset.fa==='export-trip')exportTrip(); return;}
+  if(t.dataset.fa){ if(t.dataset.fa==='cancel')closeSheet(); else if(t.dataset.fa==='save-expense')saveExpense(); else if(t.dataset.fa==='save-payment')savePayment(); else if(t.dataset.fa==='save-booking')saveBooking(); else if(t.dataset.fa==='save-trip')saveTrip(); else if(t.dataset.fa==='photo-del')armDelete(t,deletePhoto); else if(t.dataset.fa==='photo-replace')replacePhoto(); else if(t.dataset.fa==='del-trip')armDelete(t,deleteTrip); else if(t.dataset.fa==='export-trip')exportTrip(); return;}
   if(t.dataset.fm){S.form.mode=t.dataset.fm;document.querySelectorAll('[data-fm]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.fm===S.form.mode)));
     if(S.form.mode==='custom'){const ids=S.members.map(m=>m.id).filter(i=>S.form.sel.has(i));const eq=equalSplit(totalBase(),ids);ids.forEach(i=>{if(S.form.custom[i]==null)S.form.custom[i]=eq[i];});}
     buildSplit();updateSum();return;}
@@ -665,7 +730,8 @@ document.addEventListener('click',async ev=>{
   else if(a==='edit-trip')openTrip(S.tripId);
   else if(a==='add-expense')openExpense();
   else if(a==='edit-expense')openExpense(id);
-  else if(a==='del-expense')armDelete(t,()=>guarded(()=>store.del('expenses',id)));
+  else if(a==='del-expense')armDelete(t,()=>{const ex=S.expenses.find(x=>x.id===id);guarded(async()=>{if(ex&&ex.photo)await store.del('receipts',id);await store.del('expenses',id);});});
+  else if(a==='photo')photoAction(id);
   else if(a==='toggle-exp'){const e=S.expenses.find(x=>x.id===id);if(e)guarded(()=>store.update('expenses',id,{[t.dataset.field]:!e[t.dataset.field]}));}
   else if(a==='add-payment')openPayment();
   else if(a==='del-payment')armDelete(t,()=>guarded(()=>store.del('payments',id)));
@@ -699,6 +765,7 @@ document.addEventListener('submit',async ev=>{
   if(ok){toast(name+' added.');}
 });
 document.addEventListener('change',ev=>{
+  if(ev.target.id==='photo-input'){const f=ev.target.files[0];ev.target.value='';if(f&&S.photoFor)savePhoto(S.photoFor,f);return;}
   if(ev.target.id==='trip-select')setTrip(ev.target.value);
   else if(ev.target.id==='t-import'&&ev.target.files[0])importTrip(ev.target.files[0]);
 });
@@ -791,7 +858,7 @@ async function makeFirebaseDb(){
       collection(p){const ref=fs.collection(f,pre(p));
         return {add:async d=>{const r=await fs.addDoc(ref,d);return {id:r.id};},onSnapshot:(n,e)=>fs.onSnapshot(ref,n,e)};},
       doc(p){const ref=fs.doc(f,pre(p));
-        return {set:d=>fs.setDoc(ref,d),update:d=>fs.updateDoc(ref,flat(d,'',{})),delete:()=>fs.deleteDoc(ref)};}
+        return {set:d=>fs.setDoc(ref,d),update:d=>fs.updateDoc(ref,flat(d,'',{})),delete:()=>fs.deleteDoc(ref),get:async()=>{const s=await fs.getDoc(ref);return {exists:s.exists(),data:()=>s.data()};}};}
     };
   }catch(e){console.error('Firebase failed to load',e);return null;}
 }
