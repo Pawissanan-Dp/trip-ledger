@@ -111,6 +111,9 @@ table.matrix{border-collapse:collapse;width:100%;min-width:520px;font-size:14px}
 .shares{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;grid-column:1/-1}
 .pill{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:99px;padding:2px 10px 2px 3px;font-size:13px}
 .pill b{font-weight:500}
+.pill.hl{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.filters{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.seg{flex-wrap:wrap}
 .item .foot{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;margin-top:6px}
 .tag{font-size:12px;border-radius:3px;padding:1px 7px;background:var(--surface-2);color:var(--ink-2)}
 .tag.ok{background:var(--get-soft);color:var(--get)}
@@ -238,7 +241,7 @@ function equalSplit(totalBase, ids){
 //@@logic-end
 
 /* ---------- state & storage ---------- */
-const S={trips:[],tripId:null,receipts:[],photoFor:null,members:[],expenses:[],payments:[],collections:[],tab:'overview',loaded:{},dbOk:null,gate:false,editPeople:new Set(),form:null};
+const S={trips:[],tripId:null,receipts:[],photoFor:null,expFilter:{m:'',mode:'any'},members:[],expenses:[],payments:[],collections:[],tab:'overview',loaded:{},dbOk:null,gate:false,editPeople:new Set(),form:null};
 let DB=null;
 const COLS=['members','expenses','payments','collections'];
 const fmt=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -309,7 +312,7 @@ function syncTrips(){
 }
 function setTrip(id){
   S.tripId=id;try{localStorage.setItem('tripledger.trip',id);}catch(e){}
-  closeSheet();S.editPeople.clear();subscribeTrip();
+  closeSheet();S.editPeople.clear();S.expFilter={m:'',mode:'any'};subscribeTrip();
 }
 
 /* ---------- helpers ---------- */
@@ -351,7 +354,7 @@ function render(){
   if(S.gate){$('#tabs').innerHTML='';$('#view').innerHTML=gateHTML();return;}
   const v=$('#view');
   if(!S.tripId)$('#tabs').innerHTML='';else renderTabs();
-  const banner=S.dbOk===false?`<div class="banner">Shared storage isn't connected. Add your Firebase settings to firebase-config.js, otherwise changes stay in this browser tab only and disappear on reload.</div>`:'';
+  const banner=S.dbOk===false?`<div class="banner">Shared storage isn't connected. Check the Firebase configuration and Firestore rules; changes may not be saved to shared storage.</div>`:'';
   if(S.dbOk===null||(S.dbOk&&(!S.loaded.trips||(S.tripId&&COLS.some(c=>!S.loaded[c]))))){
     v.innerHTML=`<div class="empty"><b>Loading your trips</b>Fetching people, expenses and payments.</div>`;return;
   }
@@ -417,19 +420,41 @@ function renderOverview(){
 }
 
 function renderExpenses(){
-  const list=[...S.expenses].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
+  const F=S.expFilter;if(F.m&&!mem(F.m))F.m='';
+  const pid=F.m,pname=pid?nameOf(pid):'';
+  const isPaid=e=>e.payer===pid,hasShare=e=>!!(e.shares&&pid in e.shares);
+  const all=[...S.expenses].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
+  const list=!pid?all:all.filter(e=>F.mode==='paid'?isPaid(e):F.mode==='share'?hasShare(e):(isPaid(e)||hasShare(e)));
   const items=list.map(e=>{
-    const shares=Object.entries(e.shares||{}).map(([id,v])=>`<span class="pill">${avatar(id,'sm')}<b>${esc(nameOf(id))}</b> <span class="num">${fmt.format(v)}</span></span>`).join('');
+    const shares=Object.entries(e.shares||{}).map(([id,v])=>`<span class="pill${id===pid?' hl':''}">${avatar(id,'sm')}<b>${esc(nameOf(id))}</b> <span class="num">${fmt.format(v)}</span></span>`).join('');
     const orig=e.currency&&e.currency!==baseCur()&&e.original?`<span>${esc(e.currency)} ${fmt.format(e.original)} at ${e.rate}</span>`:'';
-    return `<article class="card item"><div><h3>${esc(e.title)}</h3><div class="meta"><span>${fdate(e.date)}</span><span>Paid by ${esc(nameOf(e.payer))}</span>${orig}${e.note?`<span>${esc(e.note)}</span>`:''}</div></div>
+    const payer=e.payer===pid?`<b style="color:var(--accent)">${esc(nameOf(e.payer))}</b>`:esc(nameOf(e.payer));
+    return `<article class="card item"><div><h3>${esc(e.title)}</h3><div class="meta"><span>${fdate(e.date)}</span><span>Paid by ${payer}</span>${orig}${e.note?`<span>${esc(e.note)}</span>`:''}</div></div>
       <div class="right"><div class="big num">${money(e.amount)}</div></div>
       <div class="shares">${shares}</div>
       <div class="foot"><div class="row-actions"><button class="btn sm" data-act="toggle-exp" data-field="receipt" data-id="${e.id}" aria-pressed="${!!e.receipt}">Receipt</button>
       <button class="btn sm" data-act="toggle-exp" data-field="verified" data-id="${e.id}" aria-pressed="${!!e.verified}">Verified</button></div>
       <div class="row-actions"><button class="btn sm" data-act="photo" data-id="${e.id}">${e.photo?'View photo':'Add photo'}</button><button class="btn sm" data-act="edit-expense" data-id="${e.id}">Edit</button><button class="btn sm danger" data-act="del-expense" data-id="${e.id}">Delete</button></div></div></article>`;
   }).join('');
+  const chip=(m,label,av)=>`<button type="button" class="chip" aria-pressed="${pid===m}" data-act="exp-filter" data-m="${m}">${av||''}${esc(label)}</button>`;
+  const modes=[['any','Involved'],['paid','Paid'],['share','Shared']];
+  const bar=all.length?`<div class="filters" role="group" aria-label="Filter expenses by person"><div class="chips" style="margin-top:0">${chip('','Everyone','')}${S.members.map(m=>chip(m.id,m.name,avatar(m.id,'sm'))).join('')}</div>${pid?`<div class="seg" role="group" aria-label="Which of ${esc(pname)}'s expenses to show">${modes.map(([k,l])=>`<button type="button" data-act="exp-mode" data-mode="${k}" aria-pressed="${F.mode===k}">${l}</button>`).join('')}</div>`:''}</div>`:'';
+  let summary='';
+  if(pid){
+    const inv=all.filter(e=>isPaid(e)||hasShare(e));
+    const paid=inv.filter(isPaid).reduce((s,e)=>s+e.amount,0);
+    const share=inv.reduce((s,e)=>s+(hasShare(e)?e.shares[pid]:0),0);
+    const net=Math.round((paid-share)*100)/100;
+    const cls=net>0.004?'pos-t':net<-0.004?'neg-t':'';
+    summary=`<div class="kpis">
+      <div class="kpi"><div class="l">Paid by ${esc(pname)}</div><div class="v num">${money(paid)}</div><div class="s">${inv.filter(isPaid).length} expense${inv.filter(isPaid).length===1?'':'s'}</div></div>
+      <div class="kpi"><div class="l">${esc(pname)}'s share</div><div class="v num">${money(share)}</div><div class="s">${inv.filter(hasShare).length} expense${inv.filter(hasShare).length===1?'':'s'}</div></div>
+      <div class="kpi"><div class="l">Net on expenses</div><div class="v num ${cls}">${money(Math.abs(net))}</div><div class="s">${net>0.004?'gets back':net<-0.004?'owes':'square'}, before payments</div></div></div>`;
+  }
+  const count=pid?`<p class="caption" style="margin:0">Showing ${list.length} of ${all.length} expense${all.length===1?'':'s'}</p>`:'';
+  const empty=pid?emptyBox('Nothing for '+pname,'No expenses match this filter. Try Involved, or choose Everyone.'):emptyBox('No expenses yet','Record who paid and who shares each cost. Balances and settle-up payments update straight away.');
   return `<section><div class="sec-head"><h2>Expenses</h2><button class="btn primary" data-act="add-expense">Add expense</button></div>
-   <div class="stack">${items||emptyBox('No expenses yet','Record who paid and who shares each cost. Balances and settle-up payments update straight away.')}</div></section>`;
+   <div class="stack">${bar}${summary}${count}${items||empty}</div></section>`;
 }
 
 function renderPayments(){
@@ -728,6 +753,8 @@ document.addEventListener('click',async ev=>{
   else if(a==='copy-invite')copyInvite();
   else if(a==='new-trip')openTrip();
   else if(a==='edit-trip')openTrip(S.tripId);
+  else if(a==='exp-filter'){S.expFilter.m=t.dataset.m||'';render();}
+  else if(a==='exp-mode'){S.expFilter.mode=t.dataset.mode;render();}
   else if(a==='add-expense')openExpense();
   else if(a==='edit-expense')openExpense(id);
   else if(a==='del-expense')armDelete(t,()=>{const ex=S.expenses.find(x=>x.id===id);guarded(async()=>{if(ex&&ex.photo)await store.del('receipts',id);await store.del('expenses',id);});});
