@@ -56,6 +56,13 @@ section{min-width:0}
 .stack{display:flex;flex-direction:column;gap:12px}
 
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.ranks{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.rank-card h3{font-size:15px;font-weight:600;margin-bottom:4px}
+.rank-list{list-style:none;margin:0;padding:0}
+.rank-list li{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:center;padding-block:8px}
+.rank-list li+li{border-top:1px solid var(--line)}
+.rk{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--surface-2);font-family:var(--font-mono);font-size:13px;font-weight:500}
+.rk.r1{background:var(--accent);color:var(--accent-ink)}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
 .kpi .l{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
 .kpi .v{font-size:22px;font-weight:500;margin-top:2px}
@@ -193,13 +200,13 @@ const firebaseConfig = {
 /* ---------- pure logic ---------- */
 //@@logic-start
 function computeLedger(members, expenses, payments){
-  const net={}, owe={};
-  members.forEach(m=>{net[m.id]=0; owe[m.id]={};});
+  const net={}, owe={}, paid={};
+  members.forEach(m=>{net[m.id]=0; owe[m.id]={}; paid[m.id]=0;});
   let total=0, settled=0;
   const add=(f,t,c)=>{ if(f in owe && t in owe){ owe[f][t]=(owe[f][t]||0)+c; } };
   expenses.forEach(e=>{
     const amt=Math.round(e.amount*100); total+=amt;
-    if(e.payer in net) net[e.payer]+=amt;
+    if(e.payer in net){net[e.payer]+=amt;paid[e.payer]+=amt;}
     Object.entries(e.shares||{}).forEach(([id,sh])=>{
       const c=Math.round(sh*100);
       if(id in net) net[id]-=c;
@@ -228,8 +235,9 @@ function computeLedger(members, expenses, payments){
     if(de[j][1]===0) j++;
   }
   const netB={}; Object.keys(net).forEach(k=>netB[k]=net[k]/100);
+  const paidB={}; Object.keys(paid).forEach(k=>paidB[k]=paid[k]/100);
   const toSettle=cr.length? members.reduce((s,m)=>s+Math.max(0,net[m.id]),0)/100 : 0;
-  return {net:netB,pair,transfers,total:total/100,settled:settled/100,toSettle};
+  return {net:netB,paid:paidB,pair,transfers,total:total/100,settled:settled/100,toSettle};
 }
 function equalSplit(totalBase, ids){
   const cents=Math.round(totalBase*100), n=ids.length, out={};
@@ -237,6 +245,14 @@ function equalSplit(totalBase, ids){
   const base=Math.floor(cents/n), rem=cents-base*n;
   ids.forEach((id,i)=>{out[id]=(base+(i<rem?1:0))/100;});
   return out;
+}
+function rankTop(items,n){
+  /* items: [{id,value}] in currency units. Ranks by cents, highest first; ties share a rank
+     (1,1,3); keeps everyone whose rank is within n; ignores zero or negative values. */
+  const rows=items.map(x=>({id:x.id,c:Math.round(x.value*100)})).filter(x=>x.c>0).sort((a,b)=>b.c-a.c);
+  let rank=0,prev=null;
+  rows.forEach((r,i)=>{if(r.c!==prev){rank=i+1;prev=r.c;}r.rank=rank;r.value=r.c/100;});
+  return rows.filter(r=>r.rank<=n);
 }
 //@@logic-end
 
@@ -365,6 +381,15 @@ function render(){
   v.innerHTML=banner+body;
 }
 
+function renderRankings(L){
+  if(!S.members.length)return '';
+  const spend=rankTop(S.members.map(m=>({id:m.id,value:L.paid[m.id]||0})),3);
+  const back=rankTop(S.members.map(m=>({id:m.id,value:L.net[m.id]||0})),3);
+  const list=(rows,cls)=>`<ol class="rank-list">${rows.map(r=>`<li><span class="rk${r.rank===1?' r1':''}" aria-label="Rank ${r.rank}">${r.rank}</span>${who(r.id)}<span class="num ${cls}">${money(r.value)}</span></li>`).join('')}</ol>`;
+  const card=(title,rows,cls,note,empty)=>`<div class="card rank-card"><h3>${title}</h3>${rows.length?list(rows,cls):`<p class="hint" style="margin:6px 0">${empty}</p>`}<p class="caption">${note}</p></div>`;
+  const none=S.expenses.length?null:'No expenses yet.';
+  return `<section><div class="sec-head"><h2>Rankings</h2><span class="sub">Ties share a rank</span></div><div class="ranks">${card('Top 3 most spend',spend,'','Total each person paid for expenses. Payments between people are not counted.',none||'No one has paid yet.')}${card('Top 3 most get back',back,'pos-t','Net amount others owe them, after recorded payments. Not the amount they paid.',none||'Everyone is square.')}</div></section>`;
+}
 function renderOverview(){
   const L=computeLedger(S.members,S.expenses,S.payments);
   const colTotal=S.collections.reduce((s,c)=>s+c.total,0);
@@ -413,6 +438,7 @@ function renderOverview(){
     <p class="caption">A person who appears in any expense, payment or pre-trip booking can't be removed.</p></div>`;
 
   return `${kpis}
+  ${renderRankings(L)}
   <section><div class="sec-head"><h2>Who is ahead, who is behind</h2><span class="sub">Net of everything paid and recorded</span></div><div class="card">${bars}</div></section>
   <section><div class="sec-head"><h2>Settle up</h2>${L.transfers.length?`<button class="btn sm" data-act="copy-summary">Copy as message</button>`:''}</div><div class="card">${transfers}</div></section>
   ${S.members.length?`<section><div class="sec-head"><h2>Who owes whom</h2></div>${matrix}</section>`:''}
