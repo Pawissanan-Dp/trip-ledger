@@ -12,6 +12,7 @@
   --accent:#0E6B5B; --accent-ink:#FFFFFF; --accent-soft:#D3EAE3;
   --get:#1B7E51; --get-soft:#D5EEE1; --owe:#B4402A; --owe-soft:#F6DCD4; --warn:#7F5900; --warn-soft:#F4E5BC;
   --overlay:rgba(10,20,17,.55); color-scheme:light;
+  --c1:#0E6B5B; --c2:#C97A1E; --c3:#3F6FB5; --c4:#B4402A; --c5:#7B5EA7; --c6:#6A8F2E; --c7:#C2548C; --c8:#8A6D3B; --c9:#2C8FA3; --c10:#5E6F6A; --c11:#A9B5B1;
   --font-display:'Bai Jamjuree','IBM Plex Sans Thai',system-ui,sans-serif;
   --font-body:'IBM Plex Sans Thai',system-ui,-apple-system,'Segoe UI',sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
@@ -20,12 +21,14 @@
   --bg:#0D1412; --surface:#15211E; --surface-2:#1E2E2A; --ink:#E5EEEA; --ink-2:#9DB0A9; --line:#2A3C37;
   --accent:#4FC3AA; --accent-ink:#06241D; --accent-soft:#17382F;
   --get:#5BD497; --get-soft:#17372A; --owe:#F08A70; --owe-soft:#3E211A; --warn:#E6B84D; --warn-soft:#3B2F12;
-  --overlay:rgba(0,0,0,.65); color-scheme:dark;}}
+  --overlay:rgba(0,0,0,.65); color-scheme:dark;
+  --c1:#4FC3AA; --c2:#F0A85B; --c3:#7FA6E6; --c4:#F08A70; --c5:#B59AE0; --c6:#A3C768; --c7:#E68AB8; --c8:#C9A66B; --c9:#6CC3D6; --c10:#9AA9A5; --c11:#5F6F6A;}}
 :root[data-theme="dark"]{
   --bg:#0D1412; --surface:#15211E; --surface-2:#1E2E2A; --ink:#E5EEEA; --ink-2:#9DB0A9; --line:#2A3C37;
   --accent:#4FC3AA; --accent-ink:#06241D; --accent-soft:#17382F;
   --get:#5BD497; --get-soft:#17372A; --owe:#F08A70; --owe-soft:#3E211A; --warn:#E6B84D; --warn-soft:#3B2F12;
-  --overlay:rgba(0,0,0,.65); color-scheme:dark;}
+  --overlay:rgba(0,0,0,.65); color-scheme:dark;
+  --c1:#4FC3AA; --c2:#F0A85B; --c3:#7FA6E6; --c4:#F08A70; --c5:#B59AE0; --c6:#A3C768; --c7:#E68AB8; --c8:#C9A66B; --c9:#6CC3D6; --c10:#9AA9A5; --c11:#5F6F6A;}
 
 *{box-sizing:border-box}
 body{margin:0}
@@ -63,6 +66,22 @@ section{min-width:0}
 .rank-list li+li{border-top:1px solid var(--line)}
 .rk{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--surface-2);font-family:var(--font-mono);font-size:13px;font-weight:500}
 .rk.r1{background:var(--accent);color:var(--accent-ink)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start}
+.ch-h{font-size:15px;font-weight:600;margin-bottom:8px}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;flex:none}
+.donut{position:relative;width:min(100%,220px);margin:4px auto 14px}
+.donut svg{display:block;width:100%;height:auto;transform:rotate(-90deg)}
+.donut .ring{fill:none;stroke-width:6}
+.donut .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:30px}
+.donut .center b{font-family:var(--font-mono);font-size:15px;font-weight:500;line-height:1.2}
+.donut .center span{font-size:12px;color:var(--ink-2)}
+.legend{list-style:none;margin:0;padding:0}
+.legend li{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding-block:5px;font-size:14px}
+.legend li+li{border-top:1px solid var(--line)}
+.legend .pct{color:var(--ink-2);font-size:13px;text-align:right}
+.hbar{display:grid;grid-template-columns:minmax(96px,140px) 1fr auto;gap:10px;align-items:center;padding-block:6px}
+.hbar .t{height:14px;background:var(--surface-2);border-radius:2px;overflow:hidden}
+.hbar .t i{display:block;height:100%;border-radius:2px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
 .kpi .l{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
 .kpi .v{font-size:22px;font-weight:500;margin-top:2px}
@@ -125,6 +144,7 @@ table.matrix{border-collapse:collapse;width:100%;min-width:520px;font-size:14px}
 .tag{font-size:12px;border-radius:3px;padding:1px 7px;background:var(--surface-2);color:var(--ink-2)}
 .tag.ok{background:var(--get-soft);color:var(--get)}
 .tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.cat{background:var(--accent-soft);color:var(--accent)}
 
 .progress{height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden;grid-column:1/-1}
 .progress i{display:block;height:100%;background:var(--accent)}
@@ -254,12 +274,32 @@ function rankTop(items,n){
   rows.forEach((r,i)=>{if(r.c!==prev){rank=i+1;prev=r.c;}r.rank=rank;r.value=r.c/100;});
   return rows.filter(r=>r.rank<=n);
 }
+const LEGACY_CAT={'Cafe':'Dessert / Cafe'};
+function normCat(c){return c?(LEGACY_CAT[c]||c):'Uncategorized';}
+function categoryTotals(expenses,personId,measure,hidden){
+  /* Each expense is counted once per category. Everyone: the full amount. One person:
+     their own share of that expense (measure 'share') or the full amount of expenses they
+     paid (measure 'paid'). Shares add up to the expense amount, so nothing is double counted. */
+  const map={};
+  expenses.forEach(e=>{
+    const cat=normCat(e.category);
+    if(hidden&&hidden.has(cat))return;
+    let c=0;
+    if(!personId)c=Math.round(e.amount*100);
+    else if(measure==='paid')c=e.payer===personId?Math.round(e.amount*100):0;
+    else c=(e.shares&&personId in e.shares)?Math.round(e.shares[personId]*100):0;
+    if(c>0)map[cat]=(map[cat]||0)+c;
+  });
+  const rows=Object.keys(map).map(cat=>({cat,cents:map[cat]})).sort((a,b)=>b.cents-a.cents||a.cat.localeCompare(b.cat));
+  return {rows,totalCents:rows.reduce((s,r)=>s+r.cents,0)};
+}
 //@@logic-end
 
 /* ---------- state & storage ---------- */
-const S={trips:[],tripId:null,receipts:[],photoFor:null,expFilter:{m:'',mode:'any'},members:[],expenses:[],payments:[],collections:[],tab:'overview',loaded:{},dbOk:null,gate:false,editPeople:new Set(),form:null};
+const S={trips:[],tripId:null,receipts:[],photoFor:null,expFilter:{m:'',mode:'any'},chart:{m:'',measure:'share',hide:new Set()},members:[],expenses:[],payments:[],collections:[],tab:'overview',loaded:{},dbOk:null,gate:false,editPeople:new Set(),form:null};
 let DB=null;
 const COLS=['members','expenses','payments','collections'];
+const CATEGORIES=['Attraction','Accommodation','Transportation','Flight','Food','Coffees','Dessert / Cafe','Shopping','Night Life','Other'];
 const fmt=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const SYMS={THB:'฿',TWD:'NT$',JPY:'¥',USD:'$',EUR:'€',GBP:'£',KRW:'₩',SGD:'S$',VND:'₫',MYR:'RM',CNY:'CN¥',AUD:'A$'};
 const CURS=Object.keys(SYMS);
@@ -328,7 +368,7 @@ function syncTrips(){
 }
 function setTrip(id){
   S.tripId=id;try{localStorage.setItem('tripledger.trip',id);}catch(e){}
-  closeSheet();S.editPeople.clear();S.expFilter={m:'',mode:'any'};subscribeTrip();
+  closeSheet();S.editPeople.clear();S.expFilter={m:'',mode:'any'};S.chart={m:'',measure:'share',hide:new Set()};subscribeTrip();
 }
 
 /* ---------- helpers ---------- */
@@ -351,7 +391,7 @@ function armDelete(btn,fn){
 }
 
 /* ---------- rendering ---------- */
-const TABS=[['overview','Overview'],['pretrip','Pre-trip'],['expenses','Expenses'],['payments','Payments']];
+const TABS=[['overview','Overview'],['pretrip','Pre-trip'],['expenses','Expenses'],['payments','Payments'],['chart','Chart']];
 function renderTabs(){
   $('#tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab" role="tab" id="tab-${k}" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join('');
 }
@@ -377,18 +417,18 @@ function render(){
   if(!S.tripId){
     v.innerHTML=banner+`<div class="empty"><b>Start your first trip</b>Name the trip, choose its currency and list who is going. Then collect money before the trip, record expenses as they happen and see exactly who pays whom at the end.<br><button class="btn primary" style="margin-top:14px" data-act="new-trip">New trip</button></div>`;return;
   }
-  const body={overview:renderOverview,pretrip:renderPretrip,expenses:renderExpenses,payments:renderPayments}[S.tab]();
+  const body={overview:renderOverview,pretrip:renderPretrip,expenses:renderExpenses,payments:renderPayments,chart:renderChart}[S.tab]();
   v.innerHTML=banner+body;
 }
 
 function renderRankings(L){
   if(!S.members.length)return '';
   const spend=rankTop(S.members.map(m=>({id:m.id,value:L.paid[m.id]||0})),3);
-  const back=rankTop(S.members.map(m=>({id:m.id,value:L.net[m.id]||0})),3);
+  const owes=rankTop(S.members.map(m=>({id:m.id,value:-(L.net[m.id]||0)})),3);
   const list=(rows,cls)=>`<ol class="rank-list">${rows.map(r=>`<li><span class="rk${r.rank===1?' r1':''}" aria-label="Rank ${r.rank}">${r.rank}</span>${who(r.id)}<span class="num ${cls}">${money(r.value)}</span></li>`).join('')}</ol>`;
   const card=(title,rows,cls,note,empty)=>`<div class="card rank-card"><h3>${title}</h3>${rows.length?list(rows,cls):`<p class="hint" style="margin:6px 0">${empty}</p>`}<p class="caption">${note}</p></div>`;
   const none=S.expenses.length?null:'No expenses yet.';
-  return `<section><div class="sec-head"><h2>Rankings</h2><span class="sub">Ties share a rank</span></div><div class="ranks">${card('Top 3 most spend',spend,'','Total each person paid for expenses. Payments between people are not counted.',none||'No one has paid yet.')}${card('Top 3 most get back',back,'pos-t','Net amount others owe them, after recorded payments. Not the amount they paid.',none||'Everyone is square.')}</div></section>`;
+  return `<section><div class="sec-head"><h2>Rankings</h2><span class="sub">Ties share a rank</span></div><div class="ranks">${card('Top 3 most spend',spend,'','Total each person paid for expenses. Payments between people are not counted.',none||'No one has paid yet.')}${card('Top 3 most owes',owes,'neg-t','Net amount they still owe others, after recorded payments.',none||'Everyone is square.')}</div></section>`;
 }
 function renderOverview(){
   const L=computeLedger(S.members,S.expenses,S.payments);
@@ -455,7 +495,7 @@ function renderExpenses(){
     const shares=Object.entries(e.shares||{}).map(([id,v])=>`<span class="pill${id===pid?' hl':''}">${avatar(id,'sm')}<b>${esc(nameOf(id))}</b> <span class="num">${fmt.format(v)}</span></span>`).join('');
     const orig=e.currency&&e.currency!==baseCur()&&e.original?`<span>${esc(e.currency)} ${fmt.format(e.original)} at ${e.rate}</span>`:'';
     const payer=e.payer===pid?`<b style="color:var(--accent)">${esc(nameOf(e.payer))}</b>`:esc(nameOf(e.payer));
-    return `<article class="card item"><div><h3>${esc(e.title)}</h3><div class="meta"><span>${fdate(e.date)}</span><span>Paid by ${payer}</span>${orig}${e.note?`<span>${esc(e.note)}</span>`:''}</div></div>
+    return `<article class="card item"><div><h3>${esc(e.title)}</h3><div class="meta">${e.category?`<span class="tag cat">${esc(normCat(e.category))}</span>`:''}<span>${fdate(e.date)}</span><span>Paid by ${payer}</span>${orig}${e.note?`<span>${esc(e.note)}</span>`:''}</div></div>
       <div class="right"><div class="big num">${money(e.amount)}</div></div>
       <div class="shares">${shares}</div>
       <div class="foot"><div class="row-actions"><button class="btn sm" data-act="toggle-exp" data-field="receipt" data-id="${e.id}" aria-pressed="${!!e.receipt}">Receipt</button>
@@ -481,6 +521,42 @@ function renderExpenses(){
   const empty=pid?emptyBox('Nothing for '+pname,'No expenses match this filter. Try Involved, or choose Everyone.'):emptyBox('No expenses yet','Record who paid and who shares each cost. Balances and settle-up payments update straight away.');
   return `<section><div class="sec-head"><h2>Expenses</h2><button class="btn primary" data-act="add-expense">Add expense</button></div>
    <div class="stack">${bar}${summary}${count}${items||empty}</div></section>`;
+}
+
+function catColor(cat){
+  if(cat==='Uncategorized')return 'var(--c11)';
+  const i=CATEGORIES.indexOf(cat);
+  return 'var(--c'+((i<0?CATEGORIES.length-1:i)+1)+')';
+}
+function renderChart(){
+  const C=S.chart;if(C.m&&!mem(C.m))C.m='';
+  const pid=C.m,pname=pid?nameOf(pid):'';
+  const everything=categoryTotals(S.expenses,pid,C.measure,null);
+  const sel=categoryTotals(S.expenses,pid,C.measure,C.hide);
+  const chip=(m,label,av)=>`<button type="button" class="chip" aria-pressed="${pid===m}" data-act="ch-person" data-m="${m}">${av||''}${esc(label)}</button>`;
+  const people=`<div class="chips" style="margin-top:0">${chip('','Everyone','')}${S.members.map(m=>chip(m.id,m.name,avatar(m.id,'sm'))).join('')}</div>`;
+  const seg=pid?`<div class="seg" role="group" aria-label="What to count for ${esc(pname)}">${[['share',pname+"'s share"],['paid','Paid by '+pname]].map(([k,l])=>`<button type="button" data-act="ch-measure" data-v="${k}" aria-pressed="${C.measure===k}">${esc(l)}</button>`).join('')}</div>`:'';
+  const cats=everything.rows.map(r=>{const on=!C.hide.has(r.cat);return `<button type="button" class="chip ${on?'':'out'}" aria-pressed="${on}" data-act="ch-cat" data-c="${esc(r.cat)}"><i class="sw" style="background:${catColor(r.cat)}"></i>${esc(r.cat)}</button>`;}).join('');
+  const filters=S.expenses.length?`<div class="filters" role="group" aria-label="Chart filters">${people}${seg}${cats?`<div><div class="caption" style="margin:0 0 6px">Categories shown${C.hide.size?` <button class="btn sm ghost" data-act="ch-reset">Show all</button>`:''}</div><div class="chips" style="margin-top:0">${cats}</div></div>`:''}</div>`:'';
+  const basis=!pid?'All expenses, each counted once at its full amount.':C.measure==='paid'?`Expenses ${esc(pname)} paid, at the full amount.`:`${esc(pname)}'s own part of each expense they share in, so shared costs are not counted twice.`;
+  let body;
+  if(!S.expenses.length)body=emptyBox('No expenses yet','Record expenses first, then the charts show where the money went.');
+  else if(!everything.rows.length)body=emptyBox('Nothing to chart for '+pname,C.measure==='paid'?pname+' has not paid for any expense.':pname+' is not part of any expense.');
+  else if(!sel.rows.length)body=`<div class="empty"><b>All categories are hidden</b>Turn one back on, or <button class="btn sm" data-act="ch-reset">show all</button>.</div>`;
+  else{
+    const tot=sel.totalCents,mx=sel.rows[0].cents;
+    let cum=0;
+    const ring=sel.rows.map(r=>{const p=r.cents/tot*100;const s=`<circle class="ring" cx="21" cy="21" r="16" pathLength="100" style="stroke:${catColor(r.cat)}" stroke-dasharray="${p.toFixed(4)} ${(100-p).toFixed(4)}" stroke-dashoffset="${(-cum).toFixed(4)}"/>`;cum+=p;return s;}).join('');
+    const label='Doughnut chart of spending by category: '+sel.rows.map(r=>`${r.cat} ${(r.cents/tot*100).toFixed(1)}%`).join(', ');
+    const legend=sel.rows.map(r=>`<li><i class="sw" style="background:${catColor(r.cat)}"></i><span>${esc(r.cat)}</span><span class="pct num">${(r.cents/tot*100).toFixed(1)}%</span><span class="num">${money(r.cents/100)}</span></li>`).join('');
+    const bars=sel.rows.map(r=>`<div class="hbar"><span class="who"><i class="sw" style="background:${catColor(r.cat)}"></i><span class="n">${esc(r.cat)}</span></span><div class="t"><i style="width:${(r.cents/mx*100).toFixed(2)}%;background:${catColor(r.cat)}"></i></div><span class="num">${money(r.cents/100)}</span></div>`).join('');
+    const unc=sel.rows.some(r=>r.cat==='Uncategorized')?`<p class="caption">Some expenses have no category yet. Edit them on the Expenses tab to place them in a category.</p>`:'';
+    body=`<div class="charts"><div class="card"><h3 class="ch-h">Share of spending</h3>
+      <div class="donut"><svg viewBox="0 0 42 42" role="img" aria-label="${esc(label)}">${ring}</svg><div class="center"><b>${money(tot/100)}</b><span>${pid?(C.measure==='paid'?'paid':'their share'):'total spent'}</span></div></div>
+      <ul class="legend">${legend}</ul></div>
+      <div class="card"><h3 class="ch-h">Spending by category</h3>${bars}</div></div>${unc}`;
+  }
+  return `<section><div class="sec-head"><h2>Expense chart</h2><span class="sub">${basis}</span></div><div class="stack">${filters}${body}</div></section>`;
 }
 
 function renderPayments(){
@@ -549,6 +625,7 @@ function openExpense(id){
     <div class="f"><label for="x-cur">Currency</label><select id="x-cur">${[base,...CURS.filter(c=>c!==base)].map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('')}</select></div>
   </div>
   <div class="f" id="x-rate-wrap" ${cur===base?'hidden':''}><label for="x-rate">Rate to ${base} (1 <span id="x-cur-l">${cur}</span> = ? ${base})</label><input type="number" id="x-rate" inputmode="decimal" step="0.0001" min="0" value="${e&&e.rate?e.rate:''}" placeholder="1.043"></div>
+  <div class="f"><label for="x-cat">Category</label><select id="x-cat">${CATEGORIES.map(c=>`<option ${c===(e&&e.category?normCat(e.category):'Other')?'selected':''}>${c}</option>`).join('')}</select></div>
   <div class="f"><label for="x-note">Note (optional)</label><input type="text" id="x-note" value="${esc(e?e.note||'':'')}" maxlength="120" autocomplete="off"></div>
   <div><label style="margin-bottom:6px">Split between</label>
     <div class="seg" role="group" aria-label="Split method"><button type="button" data-fm="equal" aria-pressed="${mode==='equal'}">Equally</button><button type="button" data-fm="custom" aria-pressed="${mode==='custom'}">Custom amounts</button></div></div>
@@ -603,7 +680,7 @@ async function saveExpense(){
     if(Math.abs(sum-tb)>=0.005){toast('Custom shares must add up to the total.');return;}
   }
   const k=F.keep||{};
-  const data={title,payer:$('#x-payer').value,amount:tb,currency:cur,date:$('#x-date').value||todayISO(),note:$('#x-note').value.trim(),shares,
+  const data={title,payer:$('#x-payer').value,amount:tb,currency:cur,date:$('#x-date').value||todayISO(),category:$('#x-cat').value,note:$('#x-note').value.trim(),shares,
     receipt:!!k.receipt,verified:!!k.verified,photo:!!k.photo,createdAt:k.createdAt||Date.now()};
   if(cur!==baseCur()){data.original=parseFloat($('#x-amount').value);data.rate=parseFloat($('#x-rate').value);}
   const ok=await guarded(()=>F.id?store.set('expenses',F.id,data):store.add('expenses',data));
@@ -779,6 +856,10 @@ document.addEventListener('click',async ev=>{
   else if(a==='copy-invite')copyInvite();
   else if(a==='new-trip')openTrip();
   else if(a==='edit-trip')openTrip(S.tripId);
+  else if(a==='ch-person'){S.chart.m=t.dataset.m||'';render();}
+  else if(a==='ch-measure'){S.chart.measure=t.dataset.v;render();}
+  else if(a==='ch-cat'){const c=t.dataset.c;S.chart.hide.has(c)?S.chart.hide.delete(c):S.chart.hide.add(c);render();}
+  else if(a==='ch-reset'){S.chart.hide.clear();render();}
   else if(a==='exp-filter'){S.expFilter.m=t.dataset.m||'';render();}
   else if(a==='exp-mode'){S.expFilter.mode=t.dataset.mode;render();}
   else if(a==='add-expense')openExpense();
