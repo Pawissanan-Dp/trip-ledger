@@ -402,7 +402,7 @@ function renderHeader(){
   if(S.gate){$('#tripbar').innerHTML='';$('#tripmeta').textContent='Private group ledger';return;}
   const opts=S.trips.map(x=>`<option value="${x.id}" ${x.id===S.tripId?'selected':''}>${esc(x.name)}</option>`).join('');
   $('#tripbar').innerHTML=(S.trips.length?`<label class="sr-only" for="trip-select">Trip</label><select id="trip-select">${opts}</select>`:'')
-    +(t?`<button class="btn sm" data-act="edit-trip">Edit trip</button>`:'')+(GROUP?`<button class="btn sm" data-act="copy-invite">Copy invite link</button>`:'')+`<button class="btn sm primary" data-act="new-trip">New trip</button>`;
+    +(t?`<button class="btn sm" data-act="edit-trip">Edit trip</button>`:'')+(GROUP?`<button class="btn sm" data-act="copy-invite">Copy invite link</button><button class="btn sm" data-act="switch-group">Switch / new group</button>`:'')+`<button class="btn sm primary" data-act="new-trip">New trip</button>`;
   $('#tripmeta').textContent=t?[t.place,t.dates,'amounts in '+t.currency].filter(Boolean).join(' · '):'Split costs, collect money and settle up after any group trip.';
 }
 function render(){
@@ -853,6 +853,7 @@ document.addEventListener('click',async ev=>{
   if(t.dataset.fs){const id=t.dataset.fs;S.form.sel.has(id)?S.form.sel.delete(id):S.form.sel.add(id);buildSplit();updateSum();return;}
   const a=t.dataset.act,id=t.dataset.id;
   if(a==='gate-new')gateNew();
+  else if(a==='switch-group'){try{localStorage.removeItem('groupCode');}catch(e){}location.href=location.pathname;}
   else if(a==='copy-invite')copyInvite();
   else if(a==='new-trip')openTrip();
   else if(a==='edit-trip')openTrip(S.tripId);
